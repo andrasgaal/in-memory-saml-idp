@@ -1,5 +1,8 @@
 package com.andrasgaal.inmemoryidp
 
+import org.hamcrest.CoreMatchers.containsString
+import org.hamcrest.CoreMatchers.not
+import org.hamcrest.MatcherAssert.assertThat
 import org.http4k.client.ApacheClient
 import org.http4k.core.Method
 import org.http4k.core.Request
@@ -8,7 +11,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.opensaml.saml.common.xml.SAMLConstants.SAML20P_NS
 import org.opensaml.saml.saml2.metadata.EntityDescriptor
+import org.opensaml.security.credential.UsageType
 import org.w3c.dom.Document
 
 class ApplicationTest {
@@ -55,13 +60,24 @@ class ApplicationTest {
     }
 
     @Test
-    internal fun `idp metadata contains custom entityID`() {
+    internal fun `idp metadata contains custom entityID and signing certificate`() {
         val entityID = "someEntityID"
+
         val metadata = InmemoryIdp(entityID).metadata
 
+        val parsedMetadata = parse(metadata)
+        val signingCertificate = signingCertificateFrom(parsedMetadata)
+        assertEquals(parsedMetadata.entityID, entityID)
+        assertThat(signingCertificate, not(containsString("BEGIN")))
+    }
+
+    private fun signingCertificateFrom(parsedMetadata: EntityDescriptor): String? =
+            parsedMetadata.getIDPSSODescriptor(SAML20P_NS).keyDescriptors.first { it.use == UsageType.SIGNING }
+                    .keyInfo.x509Datas.first().x509Certificates.first().value!!
+
+    private fun parse(metadata: String): EntityDescriptor {
         val mdDocument: Document = XmlHelper.registry.parserPool.parse(metadata.byteInputStream())
         val unmarshaller = XmlHelper.registry.unmarshallerFactory.getUnmarshaller(mdDocument.documentElement)!!
-        val parsedMetadata = unmarshaller.unmarshall(mdDocument.documentElement) as EntityDescriptor
-        assertEquals(parsedMetadata.entityID, entityID)
+        return unmarshaller.unmarshall(mdDocument.documentElement) as EntityDescriptor
     }
 }

@@ -9,6 +9,8 @@ repositories {
 val http4kVersion = "3.271.0"
 val openSamlVersion = "3.4.5"
 val jUnitVersions = "5.7.0"
+val bouncyCastleVersion = "1.66"
+val hamcrestVersion = 2.2
 dependencies {
     implementation("org.http4k:http4k-core:$http4kVersion")
     implementation("org.http4k:http4k-server-netty:$http4kVersion")
@@ -16,9 +18,12 @@ dependencies {
     implementation("org.opensaml:opensaml-core:$openSamlVersion")
     implementation("org.opensaml:opensaml-saml-api:$openSamlVersion")
     implementation("org.opensaml:opensaml-saml-impl:$openSamlVersion")
+    implementation("org.bouncycastle:bcprov-jdk15on:$bouncyCastleVersion")
+    implementation("org.bouncycastle:bcpkix-jdk15on:$bouncyCastleVersion")
 
     testImplementation(platform("org.junit:junit-bom:$jUnitVersions"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.hamcrest:hamcrest:$hamcrestVersion")
 }
 
 tasks.test {

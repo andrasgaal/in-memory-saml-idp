@@ -15,6 +15,8 @@ import org.http4k.server.asServer
 import org.opensaml.core.xml.XMLObject
 import org.opensaml.saml.common.xml.SAMLConstants.SAML20P_NS
 import org.opensaml.saml.saml2.metadata.EntityDescriptor
+import org.opensaml.saml.saml2.metadata.KeyDescriptor
+import org.opensaml.saml.saml2.metadata.RoleDescriptor
 import org.opensaml.saml.saml2.metadata.impl.IDPSSODescriptorBuilder
 import org.opensaml.saml.saml2.metadata.impl.KeyDescriptorBuilder
 import org.opensaml.security.credential.UsageType
@@ -40,33 +42,36 @@ class InmemoryIdp(private val customEntityID: String = "http://in-memory-idp") {
     private fun constructMetadata(): String {
         return XmlHelper.registry.builderFactory.getBuilder(EntityDescriptor.ELEMENT_QNAME)
                 ?.let { it.buildObject(EntityDescriptor.ELEMENT_QNAME) as? EntityDescriptor }
-                ?.apply {
-                    entityID = customEntityID
-                    this.roleDescriptors.add(
-                            IDPSSODescriptorBuilder().buildObject().apply {
-                                addSupportedProtocol(SAML20P_NS)
-                                keyDescriptors.add(
-                                        KeyDescriptorBuilder().buildObject().apply {
-                                            use = UsageType.SIGNING
-                                            keyInfo = KeyInfoBuilder().buildObject().apply {
-                                                x509Datas.add(
-                                                        X509DataBuilder().buildObject().apply {
-                                                            this.x509Certificates.add(
-                                                                    X509CertificateBuilder().buildObject().apply {
-                                                                        this.value = getOrCreateSigningCertificate()
-                                                                    }
-                                                            )
-                                                        }
-                                                )
-                                            }
-                                        }
-                                )
-                            }
-
-                    )
-                }
+                ?.applyDetails()
                 ?.let { serialize(it) }
                 ?: throw MetadataSerializationException("Builder to construct EntityDescriptor is missing.")
+    }
+
+    private fun EntityDescriptor?.applyDetails(): EntityDescriptor? {
+        return this?.apply {
+            entityID = customEntityID
+            this.roleDescriptors.add(idpSsoDescriptor())
+        }
+    }
+
+    private fun idpSsoDescriptor(): RoleDescriptor {
+        return IDPSSODescriptorBuilder().buildObject().apply {
+            addSupportedProtocol(SAML20P_NS)
+            keyDescriptors.add(signingKeyDescriptor())
+        }
+    }
+
+    private fun signingKeyDescriptor(): KeyDescriptor {
+        return KeyDescriptorBuilder().buildObject().apply {
+            use = UsageType.SIGNING
+            keyInfo = KeyInfoBuilder().buildObject().apply {
+                x509Datas.add(X509DataBuilder().buildObject().apply {
+                    this.x509Certificates.add(X509CertificateBuilder().buildObject().apply {
+                        this.value = getOrCreateSigningCertificate()
+                    })
+                })
+            }
+        }
     }
 
     private fun serialize(xml: XMLObject): String {
@@ -99,7 +104,7 @@ class InmemoryIdp(private val customEntityID: String = "http://in-memory-idp") {
         val builder = X509v3CertificateBuilder(issuer, serial, notBeforeDate, notAfterDate, subject, subjectPublicKeyInfo)
 
         val signer = JcaContentSignerBuilder("SHA256WithRSA").setProvider(BouncyCastleProvider()).build(keyPair.private)
-        val holder= builder.build(signer)
+        val holder = builder.build(signer)
 
         return String(Base64.getEncoder().encode(holder.encoded))
     }

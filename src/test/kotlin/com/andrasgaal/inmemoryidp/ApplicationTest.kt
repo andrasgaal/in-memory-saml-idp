@@ -29,7 +29,7 @@ class ApplicationTest {
     @Test
     internal fun `idp is listening on given port`() {
         val idpPort = 8000
-        idp = InmemoryIdp().port(idpPort).start()
+        idp = InmemoryIdp.Builder().port(idpPort).build().start()
 
         val response = client(Request(Method.GET, "http://localhost:$idpPort"))
 
@@ -38,7 +38,7 @@ class ApplicationTest {
 
     @Test
     internal fun `idp starts up on 8080 by default`() {
-        idp = InmemoryIdp().start()
+        idp = InmemoryIdp.Builder().build().start()
 
         val response = client(Request(Method.GET, "http://localhost:8080"))
 
@@ -48,7 +48,7 @@ class ApplicationTest {
     @Test
     internal fun `get idp metadata before or after starting the server`() {
         val idpPort = 8000
-        idp = InmemoryIdp().port(idpPort)
+        idp = InmemoryIdp.Builder().port(idpPort).build()
 
         val metadataBeforeStart = idp?.metadata
         idp?.start()
@@ -63,7 +63,7 @@ class ApplicationTest {
     internal fun `idp metadata contains custom entityID and signing certificate`() {
         val entityID = "someEntityID"
 
-        val metadata = InmemoryIdp(entityID).metadata
+        val metadata = InmemoryIdp.Builder().entityID(entityID).build().metadata
 
         val parsedMetadata = parse(metadata)
         val signingCertificate = signingCertificateFrom(parsedMetadata)

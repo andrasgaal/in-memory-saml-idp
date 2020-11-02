@@ -30,14 +30,47 @@ import java.util.Base64
 import java.util.Date
 
 
-class InmemoryIdp(private val customEntityID: String = "http://in-memory-idp") {
+class InmemoryIdp private constructor(
+        private val _port: Int,
+        private val _entityID: String,
+        private val _signingCertificate: String
+) {
 
-    private var port: Int? = null
-    private var signingCert: String? = null
     private var server: Http4kServer? = null
     private val app = { request: Request -> Response(OK).body("Hello") }
 
     val metadata: String get() = constructMetadata()
+
+    class Builder(
+            private var port: Int = 8080,
+            private var entityID: String = "http://in-memory-idp",
+            private var signingCertificate: String? = null
+    ) {
+        fun entityID(entityID: String) = apply { this.entityID = entityID }
+        fun port(port: Int) = apply { this.port = port }
+        fun signingCertificate(signingCert: String) = apply { this.signingCertificate = signingCert }
+        fun build() = InmemoryIdp(port, entityID, signingCertificate ?: generateSigningCert())
+
+        private fun generateSigningCert(): String {
+            val keyPair = KeyPairGenerator.getInstance("RSA").apply {
+                initialize(2048)
+            }.generateKeyPair()
+
+            val issuer = X500Name("cn=in-memory-idp")
+            val subject = X500Name("dc=whatever")
+            val serial = BigInteger.valueOf(System.currentTimeMillis())
+            val notBeforeDate = Date(System.currentTimeMillis() - Duration.ofDays(1).toMillis())
+            val notAfterDate = Date(System.currentTimeMillis() + Duration.ofDays(365).toMillis())
+            val subjectPublicKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.public.encoded)
+
+            val builder = X509v3CertificateBuilder(issuer, serial, notBeforeDate, notAfterDate, subject, subjectPublicKeyInfo)
+
+            val signer = JcaContentSignerBuilder("SHA256WithRSA").setProvider(BouncyCastleProvider()).build(keyPair.private)
+            val holder = builder.build(signer)
+
+            return String(Base64.getEncoder().encode(holder.encoded))
+        }
+    }
 
     private fun constructMetadata(): String {
         return XmlHelper.registry.builderFactory.getBuilder(EntityDescriptor.ELEMENT_QNAME)
@@ -49,7 +82,7 @@ class InmemoryIdp(private val customEntityID: String = "http://in-memory-idp") {
 
     private fun EntityDescriptor?.applyDetails(): EntityDescriptor? {
         return this?.apply {
-            entityID = customEntityID
+            entityID = _entityID
             this.roleDescriptors.add(idpSsoDescriptor())
         }
     }
@@ -67,7 +100,7 @@ class InmemoryIdp(private val customEntityID: String = "http://in-memory-idp") {
             keyInfo = KeyInfoBuilder().buildObject().apply {
                 x509Datas.add(X509DataBuilder().buildObject().apply {
                     this.x509Certificates.add(X509CertificateBuilder().buildObject().apply {
-                        this.value = getOrCreateSigningCertificate()
+                        this.value = _signingCertificate
                     })
                 })
             }
@@ -81,41 +114,9 @@ class InmemoryIdp(private val customEntityID: String = "http://in-memory-idp") {
                 ?: throw MetadataSerializationException("Marshaller to serialize EntityDescriptor is missing.")
     }
 
-    private fun getOrCreateSigningCertificate(): String {
-        return signingCert ?: {
-            val generatedCert = generateSigningCert()
-            signingCert = generatedCert
-            generatedCert
-        }()
-    }
-
-    private fun generateSigningCert(): String {
-        val keyPair = KeyPairGenerator.getInstance("RSA").apply {
-            initialize(2048)
-        }.generateKeyPair()
-
-        val issuer = X500Name("cn=in-memory-idp")
-        val subject = X500Name("dc=whatever")
-        val serial = BigInteger.valueOf(System.currentTimeMillis())
-        val notBeforeDate = Date(System.currentTimeMillis() - Duration.ofDays(1).toMillis())
-        val notAfterDate = Date(System.currentTimeMillis() + Duration.ofDays(365).toMillis())
-        val subjectPublicKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.public.encoded)
-
-        val builder = X509v3CertificateBuilder(issuer, serial, notBeforeDate, notAfterDate, subject, subjectPublicKeyInfo)
-
-        val signer = JcaContentSignerBuilder("SHA256WithRSA").setProvider(BouncyCastleProvider()).build(keyPair.private)
-        val holder = builder.build(signer)
-
-        return String(Base64.getEncoder().encode(holder.encoded))
-    }
-
-    fun port(port: Int): InmemoryIdp {
-        this.port = port
-        return this
-    }
 
     fun start(): InmemoryIdp {
-        server = app.asServer(Netty(port ?: 8080)).start()
+        server = app.asServer(Netty(_port)).start()
         return this
     }
 

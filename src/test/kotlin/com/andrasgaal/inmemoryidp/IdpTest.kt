@@ -16,7 +16,7 @@ import org.opensaml.saml.saml2.metadata.EntityDescriptor
 import org.opensaml.security.credential.UsageType
 import org.w3c.dom.Document
 
-class ApplicationTest {
+class IdpTest {
 
     val client = ApacheClient()
     var idp: InmemoryIdp? = null
@@ -60,15 +60,31 @@ class ApplicationTest {
     }
 
     @Test
-    internal fun `idp metadata contains custom entityID and signing certificate`() {
-        val entityID = "someEntityID"
-
-        val metadata = InmemoryIdp.Builder().entityID(entityID).build().metadata
+    internal fun `idp metadata contains default entityID and signing certificate`() {
+        val metadata = InmemoryIdp.Builder().build().metadata
 
         val parsedMetadata = parse(metadata)
         val signingCertificate = signingCertificateFrom(parsedMetadata)
+        assertEquals(parsedMetadata.entityID, "http://in-memory-idp")
+        assertNotPemFormat(signingCertificate)
+    }
+
+    @Test
+    internal fun `idp metadata contains custom entityID and signing certificate`() {
+        val entityID = "someEntityID"
+        val signingCertificate = "someCertificate"
+
+        val metadata = InmemoryIdp.Builder().entityID(entityID).signingCertificate(signingCertificate).build().metadata
+
+        val parsedMetadata = parse(metadata)
+        val signingCertificateFromMetadata = signingCertificateFrom(parsedMetadata)
         assertEquals(parsedMetadata.entityID, entityID)
+        assertEquals(signingCertificateFromMetadata, signingCertificate)
+    }
+
+    private fun assertNotPemFormat(signingCertificate: String?) {
         assertThat(signingCertificate, not(containsString("BEGIN")))
+        assertThat(signingCertificate, not(containsString("END")))
     }
 
     private fun signingCertificateFrom(parsedMetadata: EntityDescriptor): String? =

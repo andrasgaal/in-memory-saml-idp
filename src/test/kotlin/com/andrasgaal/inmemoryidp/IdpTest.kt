@@ -1,6 +1,7 @@
 package com.andrasgaal.inmemoryidp
 
 import org.hamcrest.CoreMatchers.containsString
+import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.CoreMatchers.not
 import org.hamcrest.MatcherAssert.assertThat
 import org.http4k.client.ApacheClient
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.opensaml.saml.common.xml.SAMLConstants.SAML20P_NS
+import org.opensaml.saml.common.xml.SAMLConstants.SAML2_POST_BINDING_URI
 import org.opensaml.saml.saml2.metadata.EntityDescriptor
 import org.opensaml.security.credential.UsageType
 import org.w3c.dom.Document
@@ -60,26 +62,36 @@ class IdpTest {
     }
 
     @Test
-    internal fun `idp metadata contains default entityID and signing certificate`() {
+    internal fun `idp metadata contains default settings`() {
         val metadata = InmemoryIdp.Builder().build().metadata
 
-        val parsedMetadata = parse(metadata)
-        val signingCertificate = signingCertificateFrom(parsedMetadata)
-        assertEquals(parsedMetadata.entityID, "http://in-memory-idp")
+        val entityDescriptor = parse(metadata)
+        val signingCertificate = signingCertificateFrom(entityDescriptor)
+        assertSsoService(entityDescriptor, 8080)
+        assertEquals(entityDescriptor.entityID, "http://in-memory-idp")
         assertNotPemFormat(signingCertificate)
     }
 
     @Test
-    internal fun `idp metadata contains custom entityID and signing certificate`() {
+    internal fun `idp metadata contains custom settings`() {
         val entityID = "someEntityID"
         val signingCertificate = "someCertificate"
+        val port = 8000
 
-        val metadata = InmemoryIdp.Builder().entityID(entityID).signingCertificate(signingCertificate).build().metadata
+        val metadata = InmemoryIdp.Builder().entityID(entityID).port(port).signingCertificate(signingCertificate).build().metadata
 
-        val parsedMetadata = parse(metadata)
-        val signingCertificateFromMetadata = signingCertificateFrom(parsedMetadata)
-        assertEquals(parsedMetadata.entityID, entityID)
+        val entityDescriptor = parse(metadata)
+        val signingCertificateFromMetadata = signingCertificateFrom(entityDescriptor)
+        assertSsoService(entityDescriptor, port)
+        assertEquals(entityDescriptor.entityID, entityID)
         assertEquals(signingCertificateFromMetadata, signingCertificate)
+    }
+
+    private fun assertSsoService(entityDescriptor: EntityDescriptor, port: Int) {
+        entityDescriptor.getIDPSSODescriptor(SAML20P_NS).singleSignOnServices.first()?.let {
+            assertThat(it.binding, equalTo(SAML2_POST_BINDING_URI))
+            assertThat(it.location, equalTo("http://localhost:$port/sso"))
+        }
     }
 
     private fun assertNotPemFormat(signingCertificate: String?) {
@@ -87,8 +99,8 @@ class IdpTest {
         assertThat(signingCertificate, not(containsString("END")))
     }
 
-    private fun signingCertificateFrom(parsedMetadata: EntityDescriptor): String? =
-            parsedMetadata.getIDPSSODescriptor(SAML20P_NS).keyDescriptors.first { it.use == UsageType.SIGNING }
+    private fun signingCertificateFrom(entityDescriptor: EntityDescriptor): String? =
+            entityDescriptor.getIDPSSODescriptor(SAML20P_NS).keyDescriptors.first { it.use == UsageType.SIGNING }
                     .keyInfo.x509Datas.first().x509Certificates.first().value!!
 
     private fun parse(metadata: String): EntityDescriptor {

@@ -14,11 +14,14 @@ import org.http4k.server.Netty
 import org.http4k.server.asServer
 import org.opensaml.core.xml.XMLObject
 import org.opensaml.saml.common.xml.SAMLConstants.SAML20P_NS
+import org.opensaml.saml.common.xml.SAMLConstants.SAML2_POST_BINDING_URI
 import org.opensaml.saml.saml2.metadata.EntityDescriptor
 import org.opensaml.saml.saml2.metadata.KeyDescriptor
 import org.opensaml.saml.saml2.metadata.RoleDescriptor
+import org.opensaml.saml.saml2.metadata.SingleSignOnService
 import org.opensaml.saml.saml2.metadata.impl.IDPSSODescriptorBuilder
 import org.opensaml.saml.saml2.metadata.impl.KeyDescriptorBuilder
+import org.opensaml.saml.saml2.metadata.impl.SingleSignOnServiceBuilder
 import org.opensaml.security.credential.UsageType
 import org.opensaml.xmlsec.signature.impl.KeyInfoBuilder
 import org.opensaml.xmlsec.signature.impl.X509CertificateBuilder
@@ -91,6 +94,14 @@ class InmemoryIdp private constructor(
         return IDPSSODescriptorBuilder().buildObject().apply {
             addSupportedProtocol(SAML20P_NS)
             keyDescriptors.add(signingKeyDescriptor())
+            singleSignOnServices.add(ssoService())
+        }
+    }
+
+    private fun ssoService(): SingleSignOnService {
+        return SingleSignOnServiceBuilder().buildObject().apply {
+            binding = SAML2_POST_BINDING_URI
+            location = "http://localhost:$_port/sso"
         }
     }
 

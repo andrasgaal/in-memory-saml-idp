@@ -10,7 +10,9 @@ val http4kVersion = "3.271.0"
 val openSamlVersion = "3.4.5"
 val jUnitVersions = "5.7.0"
 val bouncyCastleVersion = "1.66"
-val hamcrestVersion = 2.2
+val junitVersion = "5.7.0"
+val hamcrestVersion = "2.2"
+val jsoupVersion = "1.10.3"
 dependencies {
     implementation("org.http4k:http4k-core:$http4kVersion")
     implementation("org.http4k:http4k-server-netty:$http4kVersion")
@@ -22,8 +24,9 @@ dependencies {
     implementation("org.bouncycastle:bcpkix-jdk15on:$bouncyCastleVersion")
 
     testImplementation(platform("org.junit:junit-bom:$jUnitVersions"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.junit.jupiter:junit-jupiter:$junitVersion")
     testImplementation("org.hamcrest:hamcrest:$hamcrestVersion")
+    testImplementation("org.jsoup:jsoup:$jsoupVersion")
 }
 
 tasks.test {

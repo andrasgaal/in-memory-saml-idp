@@ -68,12 +68,12 @@ class InmemoryIdp private constructor(
         fun entityID(entityID: String) = apply { this.entityID = entityID }
         fun port(port: Int) = apply { this.port = port }
         fun signingCertificate(signingCert: String) = apply { this.signingCertificate = signingCert }
-        fun samlResponse(responseXml: String) = apply { this.samlResponse = responseXml }
+        fun samlResponseXml(responseXml: String) = apply { this.samlResponse = responseXml }
         fun build() = InmemoryIdp(
                 port,
                 entityID,
                 signingCertificate ?: defaultSigningCert(),
-                samlResponse ?: defaultSamlResponse()
+                Base64.getEncoder().encodeToString((samlResponse ?: defaultSamlResponse()).toByteArray())
         )
 
         private fun defaultSamlResponse(): String {

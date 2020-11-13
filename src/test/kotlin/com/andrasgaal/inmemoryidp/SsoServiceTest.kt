@@ -1,19 +1,22 @@
 package com.andrasgaal.inmemoryidp
 
-import net.shibboleth.utilities.java.support.xml.SerializeSupport.prettyPrintXML
-import org.hamcrest.CoreMatchers.containsString
+import net.shibboleth.utilities.java.support.xml.SerializeSupport
 import org.hamcrest.CoreMatchers.equalTo
+import org.hamcrest.CoreMatchers.notNullValue
 import org.hamcrest.MatcherAssert.assertThat
 import org.http4k.client.ApacheClient
 import org.http4k.core.Method.POST
 import org.http4k.core.Request
+import org.http4k.core.Response
 import org.http4k.core.Status
 import org.http4k.core.body.form
+import org.jsoup.Jsoup
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.opensaml.saml.common.xml.SAMLConstants.SAML2_POST_BINDING_URI
+import org.opensaml.saml.common.xml.SAMLConstants
 import org.opensaml.saml.saml2.core.AuthnRequest
 import org.opensaml.saml.saml2.core.impl.AuthnRequestBuilder
+import java.util.Base64
 
 class SsoServiceTest {
 
@@ -27,15 +30,41 @@ class SsoServiceTest {
 
     @Test
     internal fun `respond with SAML Response when valid SAML Request was sent to SSO Service URL`() {
-        idp = InmemoryIdp.Builder().samlResponse("someResponse").build().start()
-
+        val samlResponse = "someResponse"
         val acsUrl = "someUrl"
-        val response = client(Request(POST, "http://localhost:8080/sso")
-                .form("SAMLRequest", createSamlRequest(acsUrl)))
+        idp = InmemoryIdp.Builder().samlResponseXml(samlResponse).build().start()
+
+        val response = postSamlRequest(createSamlRequest(acsUrl))
 
         assertThat(response.status, equalTo(Status.OK))
-        assertThat(response.bodyString(), containsString("""<form method="post" action="$acsUrl">"""))
-        assertThat(response.bodyString(), containsString("""<input type="hidden" name="SAMLResponse" """))
+        val document = Jsoup.parse(response.bodyString())
+        val form = document.select("form").first()
+        assertThat(form.attr("method"), equalTo("post"))
+        assertThat(form.attr("action"), equalTo(acsUrl))
+
+        val samlResponseInput = form.select("input")
+        assertThat(samlResponseInput.attr("type"), equalTo("hidden"))
+        assertThat(samlResponseInput.attr("name"), equalTo("SAMLResponse"))
+        assertThat(String(Base64.getDecoder().decode(samlResponseInput.`val`())), equalTo(samlResponse))
+    }
+
+    @Test
+    internal fun `generate default SAML Response when not passed to builder`() {
+        idp = InmemoryIdp.Builder().build().start()
+        val acsUrl = "acsUrl"
+
+        val response = postSamlRequest(createSamlRequest(acsUrl))
+
+        assertThat(response.status, equalTo(Status.OK))
+        val document = Jsoup.parse(response.bodyString())
+        val form = document.select("form").first()
+        assertThat(form.attr("method"), equalTo("post"))
+        assertThat(form.attr("action"), equalTo(acsUrl))
+
+        val samlResponseInput = form.select("input")
+        assertThat(samlResponseInput.attr("type"), equalTo("hidden"))
+        assertThat(samlResponseInput.attr("name"), equalTo("SAMLResponse"))
+        assertThat(samlResponseInput.`val`(), notNullValue())
     }
 
     @Test
@@ -48,13 +77,16 @@ class SsoServiceTest {
         assertThat(response.status, equalTo(Status.BAD_REQUEST))
     }
 
+    private fun postSamlRequest(samlRequest: String): Response =
+            client(Request(POST, "http://localhost:8080/sso").form("SAMLRequest", samlRequest))
+
     private fun createSamlRequest(acsUrl: String): String {
         val samlRequest = AuthnRequestBuilder().buildObject().apply {
             assertionConsumerServiceURL = acsUrl
-            protocolBinding = SAML2_POST_BINDING_URI
+            protocolBinding = SAMLConstants.SAML2_POST_BINDING_URI
         }
         return XmlHelper.registry.marshallerFactory.getMarshaller(AuthnRequest.DEFAULT_ELEMENT_NAME)
                 ?.marshall(samlRequest)
-                ?.let { prettyPrintXML(it) }!!
+                ?.let { SerializeSupport.prettyPrintXML(it) }!!
     }
 }

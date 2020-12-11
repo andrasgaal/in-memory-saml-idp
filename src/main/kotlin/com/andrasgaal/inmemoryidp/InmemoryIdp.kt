@@ -38,12 +38,14 @@ import org.opensaml.security.credential.UsageType
 import org.opensaml.xmlsec.signature.impl.KeyInfoBuilder
 import org.opensaml.xmlsec.signature.impl.X509CertificateBuilder
 import org.opensaml.xmlsec.signature.impl.X509DataBuilder
+import java.lang.RuntimeException
 import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.time.Duration
 import java.util.Base64
 import java.util.Date
 
+class MetadataSerializationException(message: String) : RuntimeException("Unable to serialize metadata. $message")
 
 class InmemoryIdp private constructor(
         private val _port: Int,
@@ -141,9 +143,12 @@ class InmemoryIdp private constructor(
             <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
             <head></head>
             <body>
-            <form method="post" action="SP_ACS_URL">
+            <form method="post" action="SP_ACS_URL" id="samlRequestPostForm">
                 <input type="hidden" name="SAMLResponse" value="SAML_RESPONSE_VALUE">
             </form>
+            <script>
+              document.getElementById("samlRequestPostForm").submit();
+            </script>
             </body>
             </html>
         """.trimIndent()

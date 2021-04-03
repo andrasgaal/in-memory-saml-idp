@@ -7,15 +7,16 @@ import org.opensaml.core.config.InitializationService
 import org.opensaml.core.xml.XMLObject
 import org.opensaml.core.xml.config.XMLObjectProviderRegistry
 import org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport
+import org.opensaml.saml.saml2.core.Response
 import java.lang.RuntimeException
 import javax.xml.namespace.QName
 
 class XmlHelper {
     companion object {
-        val registry: XMLObjectProviderRegistry get() = getRegistryFromConfigService() ?: {
+        val registry: XMLObjectProviderRegistry get() = getRegistryFromConfigService() ?: run {
             init()
             getRegistryFromConfigService() ?: throw RuntimeException()
-        }()
+        }
 
         private fun init() {
             InitializationService.initialize()
@@ -34,5 +35,8 @@ class XmlHelper {
                     ?.let { SerializeSupport.prettyPrintXML(it) }
                     ?: throw MetadataSerializationException("Marshaller to serialize $qName is missing.")
         }
+
+        fun Response.serialize() =
+            serialize(this, Response.DEFAULT_ELEMENT_NAME)
     }
 }

@@ -21,7 +21,7 @@ import org.w3c.dom.Document
 class IdpTest {
 
     val client = ApacheClient()
-    var idp: InmemoryIdp? = null
+    var idp: InMemoryIdp? = null
 
     @AfterEach
     internal fun tearDown() {
@@ -31,7 +31,7 @@ class IdpTest {
     @Test
     internal fun `idp is listening on given port`() {
         val idpPort = 8000
-        idp = InmemoryIdp.Builder().port(idpPort).build().start()
+        idp = InMemoryIdp.Builder().port(idpPort).build().start()
 
         val response = client(Request(Method.GET, "http://localhost:$idpPort"))
 
@@ -40,7 +40,7 @@ class IdpTest {
 
     @Test
     internal fun `idp starts up on 8080 by default`() {
-        idp = InmemoryIdp.Builder().build().start()
+        idp = InMemoryIdp.Builder().build().start()
 
         val response = client(Request(Method.GET, "http://localhost:8080"))
 
@@ -50,7 +50,7 @@ class IdpTest {
     @Test
     internal fun `get idp metadata before or after starting the server`() {
         val idpPort = 8000
-        idp = InmemoryIdp.Builder().port(idpPort).build()
+        idp = InMemoryIdp.Builder().port(idpPort).build()
 
         val metadataBeforeStart = idp?.metadata
         idp?.start()
@@ -63,9 +63,9 @@ class IdpTest {
 
     @Test
     internal fun `idp metadata contains default settings`() {
-        val metadata = InmemoryIdp.Builder().build().metadata
+        val metadata = InMemoryIdp.Builder().build().metadata
 
-        val entityDescriptor = parse(metadata)
+        val entityDescriptor = parseMetadata(metadata)
         val signingCertificate = signingCertificateFrom(entityDescriptor)
         assertSsoService(entityDescriptor, 8080)
         assertEquals(entityDescriptor.entityID, "http://in-memory-idp")
@@ -74,16 +74,20 @@ class IdpTest {
 
     @Test
     internal fun `idp metadata contains custom settings`() {
-        val entityID = "someEntityID"
+        val entityId = "someEntityID"
         val signingCertificate = "someCertificate"
         val port = 8000
 
-        val metadata = InmemoryIdp.Builder().entityID(entityID).port(port).signingCertificate(signingCertificate).build().metadata
+        val metadata = InMemoryIdp.Builder()
+            .entityId(entityId)
+            .port(port)
+            .signingCertificate(signingCertificate)
+            .build().metadata
 
-        val entityDescriptor = parse(metadata)
+        val entityDescriptor = parseMetadata(metadata)
         val signingCertificateFromMetadata = signingCertificateFrom(entityDescriptor)
         assertSsoService(entityDescriptor, port)
-        assertEquals(entityDescriptor.entityID, entityID)
+        assertEquals(entityDescriptor.entityID, entityId)
         assertEquals(signingCertificateFromMetadata, signingCertificate)
     }
 
@@ -103,7 +107,7 @@ class IdpTest {
             entityDescriptor.getIDPSSODescriptor(SAML20P_NS).keyDescriptors.first { it.use == UsageType.SIGNING }
                     .keyInfo.x509Datas.first().x509Certificates.first().value!!
 
-    private fun parse(metadata: String): EntityDescriptor {
+    private fun parseMetadata(metadata: String): EntityDescriptor {
         val mdDocument: Document = XmlHelper.registry.parserPool.parse(metadata.byteInputStream())
         val unmarshaller = XmlHelper.registry.unmarshallerFactory.getUnmarshaller(mdDocument.documentElement)!!
         return unmarshaller.unmarshall(mdDocument.documentElement) as EntityDescriptor

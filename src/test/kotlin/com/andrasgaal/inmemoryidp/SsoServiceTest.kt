@@ -21,7 +21,7 @@ import java.util.Base64
 class SsoServiceTest {
 
     private val client = ApacheClient()
-    private var idp: InmemoryIdp? = null
+    private var idp: InMemoryIdp? = null
 
     @AfterEach
     internal fun tearDown() {
@@ -32,7 +32,7 @@ class SsoServiceTest {
     internal fun `respond with SAML Response when valid SAML Request was sent to SSO Service URL`() {
         val samlResponse = "someResponse"
         val acsUrl = "someUrl"
-        idp = InmemoryIdp.Builder().samlResponseXml(samlResponse).build().start()
+        idp = InMemoryIdp.Builder().samlResponseXml(samlResponse).build().start()
 
         val response = postSamlRequest(createSamlRequest(acsUrl))
 
@@ -50,8 +50,8 @@ class SsoServiceTest {
 
     @Test
     internal fun `generate default SAML Response when not passed to builder`() {
-        idp = InmemoryIdp.Builder().build().start()
-        val acsUrl = "acsUrl"
+        idp = InMemoryIdp.Builder().build().start()
+        val acsUrl = "someUrl"
 
         val response = postSamlRequest(createSamlRequest(acsUrl))
 
@@ -69,7 +69,7 @@ class SsoServiceTest {
 
     @Test
     internal fun `show error page when not valid SAML Request was sent`() {
-        idp = InmemoryIdp.Builder().build().start()
+        idp = InMemoryIdp.Builder().build().start()
 
         val response = client(Request(POST, "http://localhost:8080/sso")
                 .form("SAMLRequest", "invalid request"))

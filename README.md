@@ -1,10 +1,10 @@
 # In-Memory SAML IDP, still in progress...
 
-##What? Why?
+## What? Why?
 This is a SAML Identity Provider, allowing you to easily test your SAML Service Provider without deploying a fully functional SAML IDP somewhere.
 You can configure its behavior in your automated tests, making it possible to test edge cases like receiving a SAML Response with an invalid certificate.
 
-##How?
+## How?
 You can configure the In-Memory IDP by a Builder and then start it using the start() method.
 ```kotlin
 InMemoryIdp.Builder()

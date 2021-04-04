@@ -30,6 +30,6 @@ Note: You don't have to start the IDP to get its metadata.
 port: 8080
 entityId: http://in-memory-idp
 signingCertificate: generated SHA256 with RSA valid for 1 year
-samlResponseXml: generated SAML Respponse with SUCCESS status code
+samlResponseXml: generated SAML Response with SUCCESS status code
 POST binding location (SingleSignOnService): http://localhost:8080/sso 
 ```

@@ -7,7 +7,8 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
 import org.bouncycastle.cert.X509v3CertificateBuilder
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
-import org.http4k.core.Method
+import org.http4k.core.Method.GET
+import org.http4k.core.Method.POST
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status.Companion.BAD_REQUEST
@@ -22,11 +23,7 @@ import org.opensaml.saml.common.xml.SAMLConstants.SAML20P_NS
 import org.opensaml.saml.common.xml.SAMLConstants.SAML2_POST_BINDING_URI
 import org.opensaml.saml.saml2.core.AuthnRequest
 import org.opensaml.saml.saml2.core.StatusCode.SUCCESS
-import org.opensaml.saml.saml2.core.impl.AssertionBuilder
-import org.opensaml.saml.saml2.core.impl.IssuerBuilder
-import org.opensaml.saml.saml2.core.impl.ResponseBuilder
-import org.opensaml.saml.saml2.core.impl.StatusBuilder
-import org.opensaml.saml.saml2.core.impl.StatusCodeBuilder
+import org.opensaml.saml.saml2.core.impl.*
 import org.opensaml.saml.saml2.metadata.EntityDescriptor
 import org.opensaml.saml.saml2.metadata.KeyDescriptor
 import org.opensaml.saml.saml2.metadata.RoleDescriptor
@@ -38,44 +35,41 @@ import org.opensaml.security.credential.UsageType
 import org.opensaml.xmlsec.signature.impl.KeyInfoBuilder
 import org.opensaml.xmlsec.signature.impl.X509CertificateBuilder
 import org.opensaml.xmlsec.signature.impl.X509DataBuilder
-import java.lang.RuntimeException
 import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.time.Duration
-import java.util.Base64
-import java.util.Date
-
-class MetadataSerializationException(message: String) : RuntimeException("Unable to serialize metadata. $message")
+import java.util.*
 
 class InMemoryIdp private constructor(
-    private val idpPort: Int,
-    private val idpEntityId: String,
-    private val idpSigningCertificate: String,
-    private val idpSamlResponse: String
+    private val port: Int,
+    private val entityId: String,
+    private val signingCertificate: String,
+    private val samlResponse: String
 ) {
 
     private var server: Http4kServer? = null
     private val app = routes(
-            "/sso" bind Method.POST to ssoAction()
+        "/" bind GET to { Response(OK) },
+        "/sso" bind POST to ssoAction()
     )
 
     val metadata: String get() = constructMetadata()
 
     class Builder(
-            private var port: Int = 8080,
-            private var entityID: String = "http://in-memory-idp",
-            private var signingCertificate: String? = null,
-            private var samlResponse: String? = null
+        private var idpPort: Int = 8080,
+        private var idpEntityId: String = "http://in-memory-idp",
+        private var idpSigningCertificate: String? = null,
+        private var idpSamlResponse: String? = null
     ) {
-        fun entityId(entityID: String) = apply { this.entityID = entityID }
-        fun port(port: Int) = apply { this.port = port }
-        fun signingCertificate(signingCert: String) = apply { this.signingCertificate = signingCert }
-        fun samlResponseXml(responseXml: String) = apply { this.samlResponse = responseXml }
+        fun entityId(entityID: String) = apply { this.idpEntityId = entityID }
+        fun port(port: Int) = apply { this.idpPort = port }
+        fun signingCertificate(signingCert: String) = apply { this.idpSigningCertificate = signingCert }
+        fun samlResponseXml(responseXml: String) = apply { this.idpSamlResponse = responseXml }
         fun build() = InMemoryIdp(
-                port,
-                entityID,
-                signingCertificate ?: defaultSigningCert(),
-                Base64.getEncoder().encodeToString((samlResponse ?: defaultSamlResponse()).toByteArray())
+            idpPort,
+            idpEntityId,
+            idpSigningCertificate ?: defaultSigningCert(),
+            Base64.getEncoder().encodeToString((idpSamlResponse ?: defaultSamlResponse()).toByteArray())
         )
 
         private fun defaultSamlResponse(): String {
@@ -84,9 +78,9 @@ class InMemoryIdp private constructor(
                     statusCode = StatusCodeBuilder().buildObject().apply { value = SUCCESS }
                 }
                 this.assertions.add(
-                        AssertionBuilder().buildObject().apply {
-                            this.issuer = IssuerBuilder().buildObject().apply { value = entityID }
-                        }
+                    AssertionBuilder().buildObject().apply {
+                        this.issuer = IssuerBuilder().buildObject().apply { value = idpEntityId }
+                    }
                 )
             }.serialize()
         }
@@ -114,25 +108,25 @@ class InMemoryIdp private constructor(
 
     private fun constructMetadata(): String {
         return registry.builderFactory.getBuilder(EntityDescriptor.ELEMENT_QNAME)
-                ?.let { it.buildObject(EntityDescriptor.ELEMENT_QNAME) as? EntityDescriptor }
-                ?.applyDetails()
-                ?.let { serialize(it, EntityDescriptor.ELEMENT_QNAME) }
-                ?: throw MetadataSerializationException("Builder to construct EntityDescriptor is missing.")
+            ?.let { it.buildObject(EntityDescriptor.ELEMENT_QNAME) as? EntityDescriptor }
+            ?.applyDetails()
+            ?.let { serialize(it, EntityDescriptor.ELEMENT_QNAME) }
+            ?: throw SerializationException("Builder to construct EntityDescriptor is missing.")
     }
 
     private fun ssoAction(): (Request) -> Response = { request ->
         val samlRequestUnmarshaller = registry.unmarshallerFactory.getUnmarshaller(AuthnRequest.DEFAULT_ELEMENT_NAME)
         val samlRequest = try {
             request.form("SAMLRequest")
-                    ?.let { registry.parserPool.parse(it.byteInputStream()) }
-                    ?.let { samlRequestUnmarshaller?.unmarshall(it.documentElement) as? AuthnRequest }
+                ?.let { registry.parserPool.parse(it.byteInputStream()) }
+                ?.let { samlRequestUnmarshaller?.unmarshall(it.documentElement) as? AuthnRequest }
         } catch (e: Exception) {
             null
         }
 
         samlRequest?.let {
-            Response(OK).header("Location", "http://localhost$idpPort/post-response")
-                    .body(postResponseHtml(it.assertionConsumerServiceURL))
+            Response(OK).header("Location", "http://localhost$port/post-response")
+                .body(postResponseHtml(it.assertionConsumerServiceURL))
         } ?: Response(BAD_REQUEST)
 
     }
@@ -152,13 +146,13 @@ class InMemoryIdp private constructor(
             </body>
             </html>
         """.trimIndent()
-                .replace("SP_ACS_URL", acsUrl)
-                .replace("SAML_RESPONSE_VALUE", idpSamlResponse)
+            .replace("SP_ACS_URL", acsUrl)
+            .replace("SAML_RESPONSE_VALUE", samlResponse)
     }
 
     private fun EntityDescriptor?.applyDetails(): EntityDescriptor? {
         return this?.apply {
-            entityID = idpEntityId
+            entityID = entityId
             this.roleDescriptors.add(idpSsoDescriptor())
         }
     }
@@ -174,7 +168,7 @@ class InMemoryIdp private constructor(
     private fun ssoService(): SingleSignOnService {
         return SingleSignOnServiceBuilder().buildObject().apply {
             binding = SAML2_POST_BINDING_URI
-            location = "http://localhost:$idpPort/sso"
+            location = "http://localhost:$port/sso"
         }
     }
 
@@ -184,7 +178,7 @@ class InMemoryIdp private constructor(
             keyInfo = KeyInfoBuilder().buildObject().apply {
                 x509Datas.add(X509DataBuilder().buildObject().apply {
                     this.x509Certificates.add(X509CertificateBuilder().buildObject().apply {
-                        this.value = idpSigningCertificate
+                        this.value = signingCertificate
                     })
                 })
             }
@@ -192,7 +186,7 @@ class InMemoryIdp private constructor(
     }
 
     fun start(): InMemoryIdp {
-        server = app.asServer(Netty(idpPort)).start()
+        server = app.asServer(Netty(port)).start()
         return this
     }
 

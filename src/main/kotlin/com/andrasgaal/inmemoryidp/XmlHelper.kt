@@ -33,7 +33,7 @@ class XmlHelper {
             return registry.marshallerFactory.getMarshaller(qName)
                     ?.marshall(xml)
                     ?.let { SerializeSupport.prettyPrintXML(it) }
-                    ?: throw MetadataSerializationException("Marshaller to serialize $qName is missing.")
+                    ?: throw SerializationException("Marshaller to serialize $qName is missing.")
         }
 
         fun Response.serialize() =

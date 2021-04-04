@@ -1,8 +1,8 @@
 package com.andrasgaal.inmemoryidp
 
+import com.andrasgaal.inmemoryidp.XmlHelper.Companion.serialize
 import net.shibboleth.utilities.java.support.xml.SerializeSupport
 import org.hamcrest.CoreMatchers.equalTo
-import org.hamcrest.CoreMatchers.notNullValue
 import org.hamcrest.MatcherAssert.assertThat
 import org.http4k.client.ApacheClient
 import org.http4k.core.Method.POST
@@ -15,8 +15,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.opensaml.saml.common.xml.SAMLConstants
 import org.opensaml.saml.saml2.core.AuthnRequest
+import org.opensaml.saml.saml2.core.StatusCode
 import org.opensaml.saml.saml2.core.impl.AuthnRequestBuilder
-import java.util.Base64
+import org.w3c.dom.Document
+import java.util.*
 
 class SsoServiceTest {
 
@@ -64,7 +66,11 @@ class SsoServiceTest {
         val samlResponseInput = form.select("input")
         assertThat(samlResponseInput.attr("type"), equalTo("hidden"))
         assertThat(samlResponseInput.attr("name"), equalTo("SAMLResponse"))
-        assertThat(samlResponseInput.`val`(), notNullValue())
+        val samlResponse = parseSamlResponse(String(Base64.getDecoder().decode(samlResponseInput.`val`())))
+        assertThat(samlResponse.status.statusCode.value, equalTo(StatusCode.SUCCESS))
+        val samlAssertion = samlResponse.assertions.first()
+        assertThat(samlAssertion.issuer.value, equalTo("http://in-memory-idp"))
+        println(samlResponse.serialize())
     }
 
     @Test
@@ -89,4 +95,11 @@ class SsoServiceTest {
                 ?.marshall(samlRequest)
                 ?.let { SerializeSupport.prettyPrintXML(it) }!!
     }
+
+    private fun parseSamlResponse(samlResponse: String): org.opensaml.saml.saml2.core.Response {
+        val mdDocument: Document = XmlHelper.registry.parserPool.parse(samlResponse.byteInputStream())
+        val unmarshaller = XmlHelper.registry.unmarshallerFactory.getUnmarshaller(mdDocument.documentElement)!!
+        return unmarshaller.unmarshall(mdDocument.documentElement) as org.opensaml.saml.saml2.core.Response
+    }
+
 }
